@@ -1,0 +1,55 @@
+name: Sync main with devweekend/buildment
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-main:
+    runs-on: ubuntu-latest
+    if: github.repository == 'asifrazadev/buildment'
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add and fetch upstream main
+        run: |
+          set -euo pipefail
+          # Required prerequisite: https://github.com/devweekend/buildment must exist and be readable.
+          # If it does not exist or is inaccessible, this workflow is expected to fail at fetch.
+          git remote add upstream https://github.com/devweekend/buildment.git 2>/dev/null || \
+            git remote set-url upstream https://github.com/devweekend/buildment.git
+          echo "Fetching upstream/main from devweekend/buildment"
+          git fetch --no-tags upstream main
+
+      - name: Sync main to upstream/main
+        run: |
+          set -euo pipefail
+          current_sha="$(git rev-parse HEAD)"
+          upstream_sha="$(git rev-parse upstream/main)"
+
+          echo "Current main SHA:   ${current_sha}"
+          echo "Upstream main SHA:  ${upstream_sha}"
+
+          if [ "${current_sha}" = "${upstream_sha}" ]; then
+            echo "main is already up to date with upstream/main; nothing to push."
+            exit 0
+          fi
+
+          echo "Updating local main to upstream/main"
+          git reset --hard upstream/main
+
+          echo "Pushing synchronized main to origin"
+          git push origin HEAD:main
